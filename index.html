@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kino — auto-zoom screen recorder</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ── toolbar ─────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="brand"><span class="mark"></span>Kino<span class="sub">studio</span></div>
+
+    <nav class="menus" id="menus">
+      <button class="mnu" data-menu="project">Project</button>
+      <button class="mnu" data-menu="edit">Edit</button>
+      <button class="mnu" data-menu="view">View</button>
+      <button class="mnu" data-menu="help">Help</button>
+    </nav>
+
+    <div class="transport">
+      <button class="tbtn" id="skipStart" title="Start (Home)">|◀</button>
+      <button class="tbtn" id="stepBack" title="Previous frame (,)">◀</button>
+      <button class="tbtn play" id="playBtn" title="Play / pause (Space)" disabled>▶</button>
+      <button class="tbtn" id="stepFwd" title="Next frame (.)">▶|</button>
+      <button class="tbtn" id="skipEnd" title="End (End)">▶|</button>
+      <button class="tbtn" id="loopBtn" title="Loop work area (L)" aria-pressed="false">↻</button>
+    </div>
+
+    <span class="sep"></span>
+
+    <div class="row">
+      <button class="btn" id="micBtn" aria-pressed="false">Mic off</button>
+      <button class="btn primary" id="recordBtn">Record screen</button>
+      <button class="btn" id="exportBtn" disabled>Export</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+
+    <!-- ── left: project, add, looks ──────────────────────── -->
+    <aside class="col left">
+      <div class="pane">
+        <div class="ph"><span>Project</span><span class="mono" id="takeCount">0 takes</span></div>
+        <ul class="takes" id="takeList">
+          <li class="empty">Nothing recorded yet. Hit <b>Record screen</b> to capture a window, tab or display.</li>
+        </ul>
+      </div>
+
+      <div class="pane">
+        <div class="ph"><span>Add</span></div>
+        <div class="addgrid">
+          <button class="add" id="addZoom" disabled><b>Zoom mark</b><span class="mono">Z</span></button>
+          <button class="add" id="addTextBtn" disabled><b>Text</b><span class="mono">T</span></button>
+          <button class="add" id="addBoxBtn" disabled><b>Box</b><span class="mono">B</span></button>
+          <button class="add" id="addCircleBtn" disabled><b>Circle</b><span class="mono">C</span></button>
+          <button class="add" id="addArrowBtn" disabled><b>Arrow</b><span class="mono">A</span></button>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="ph"><span>Looks</span></div>
+        <div class="chips" id="lookGroup">
+          <button class="chip" data-look="none" aria-pressed="true">Normal</button>
+          <button class="chip" data-look="mono">Mono</button>
+          <button class="chip" data-look="sepia">Sepia</button>
+          <button class="chip" data-look="vivid">Vivid</button>
+          <button class="chip" data-look="soft">Soft</button>
+          <button class="chip" data-look="punch">Punch</button>
+        </div>
+        <label class="ctl"><span>Vignette<em id="vignetteVal">0</em></span>
+          <input id="vignette" type="range" min="0" max="100" value="0"></label>
+        <label class="ctl"><span>Backdrop pattern</span>
+          <select id="pattern">
+            <option value="none">None</option>
+            <option value="dots">Dots</option>
+            <option value="grid">Grid</option>
+            <option value="scan">Scanlines</option>
+            <option value="glow">Radial glow</option>
+          </select></label>
+      </div>
+
+      <div class="pane">
+        <div class="ph"><span>Export</span></div>
+        <label class="ctl"><span>Frame rate</span>
+          <select id="expFps">
+            <option value="60">60 fps</option>
+            <option value="30">30 fps</option>
+            <option value="24">24 fps</option>
+          </select></label>
+        <label class="ctl"><span>Quality</span>
+          <select id="expQuality">
+            <option value="16">16 Mbps · max</option>
+            <option value="12" selected>12 Mbps · high</option>
+            <option value="8">8 Mbps · balanced</option>
+            <option value="4">4 Mbps · small</option>
+          </select></label>
+        <p class="note">Resolution follows the viewer's <b>Res</b> control. Range follows the work area — set in/out on the timeline to export a slice.</p>
+      </div>
+    </aside>
+
+    <!-- ── center: viewer + timeline ─────────────────────── -->
+    <section class="col center">
+
+      <div class="pane viewer">
+        <div class="vbar">
+          <span class="vtab">Composition</span>
+          <label class="vctl">View
+            <select id="vZoom">
+              <option value="fit">Fit</option>
+              <option value="50">50%</option>
+              <option value="100">100%</option>
+              <option value="150">150%</option>
+              <option value="200">200%</option>
+            </select></label>
+          <label class="vctl">Res
+            <select id="vRes">
+              <option value="1">Full</option>
+              <option value="0.5">Half</option>
+              <option value="0.25">Quarter</option>
+            </select></label>
+          <span class="grow"></span>
+          <span class="mono tc" id="vTime">0:00.0</span>
+        </div>
+
+        <div class="viewport" id="viewport">
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="stage" width="1920" height="1080"></canvas>
+            <video id="source" class="offscreen" playsinline></video>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane timeline">
+        <div class="tbar">
+          <span class="mono tc big" id="tc">0:00.0</span>
+          <span class="mono">/ <span id="dur">0:00.0</span></span>
+          <span class="sep"></span>
+          <button class="mini" id="setIn" title="Set work-area in point (I)">Set in</button>
+          <button class="mini" id="setOut" title="Set work-area out point (O)">Set out</button>
+          <button class="mini" id="resetRange" title="Clear the work area">Full range</button>
+          <span class="mono" id="rangeLabel">Work area: full</span>
+          <span class="grow"></span>
+          <button class="mini" id="exportPng" title="Export the current frame as PNG (P)">Frame ▸ PNG</button>
+        </div>
+
+        <div class="tl">
+          <div class="tl-left">
+            <div class="tl-ch">Layer</div>
+            <div class="tl-rows" id="tlHeads"></div>
+          </div>
+          <div class="tl-right">
+            <div class="tl-ruler" id="ruler"></div>
+            <div class="track" id="track">
+              <div class="ticks" id="ticks"></div>
+              <div class="tl-rows" id="tlRows"></div>
+              <div class="win" id="winArea"></div>
+              <div class="handle in" id="inHandle" title="Drag: work-area in"></div>
+              <div class="handle out" id="outHandle" title="Drag: work-area out"></div>
+              <div class="head" id="head"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── right: properties, clip, backdrop, cursor ──────── -->
+    <aside class="col right">
+      <div class="pane grow">
+        <div class="ph"><span>Properties</span><button class="mini" id="propsReset">Reset</button></div>
+        <div class="props" id="props">
+          <p class="empty">Select a layer to edit it, or a mark in the frame.</p>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="ph"><span>Clip</span></div>
+        <label class="ctl"><span>Padding<em id="padVal">96</em></span>
+          <input id="pad" type="range" min="0" max="220" value="96"></label>
+        <label class="ctl"><span>Corner radius<em id="radVal">30</em></span>
+          <input id="rad" type="range" min="0" max="90" value="30"></label>
+        <label class="ctl"><span>New zoom level<em id="zoomVal">1.85×</em></span>
+          <input id="zoom" type="range" min="1.2" max="3" step="0.05" value="1.85"></label>
+      </div>
+
+      <div class="pane">
+        <div class="ph"><span>Backdrop</span></div>
+        <div class="palette" id="palette"></div>
+        <div class="swatches" id="swatches"></div>
+        <p class="note">Click a block to set the backdrop, its hex to copy it. Scenes sit below.</p>
+      </div>
+
+      <div class="pane">
+        <div class="ph"><span>Cursor</span><button class="mini" id="cursorOn" aria-pressed="false">off</button></div>
+        <div class="chips" id="cursorStyles">
+          <button class="chip" data-style="arrow" aria-pressed="true">Arrow</button>
+          <button class="chip" data-style="dot">Dot</button>
+          <button class="chip" data-style="glow">Glow</button>
+          <button class="chip" id="traceBtn" disabled>Detect</button>
+        </div>
+        <label class="ctl"><span>Smoothing<em id="smoothVal">0.60</em></span>
+          <input id="smooth" type="range" min="0" max="0.95" step="0.05" value="0.6"></label>
+        <label class="ctl"><span>Fluid lag<em id="lagVal">0.08s</em></span>
+          <input id="lag" type="range" min="0" max="0.3" step="0.01" value="0.08"></label>
+        <label class="ctl"><span>Cursor size<em id="sizeVal">1.30×</em></span>
+          <input id="size" type="range" min="0.6" max="2.6" step="0.05" value="1.3"></label>
+      </div>
+
+      <div class="pane grow">
+        <div class="ph"><span>Zoom marks</span><span class="mono" id="markCount">0</span></div>
+        <ul class="marks" id="marks">
+          <li class="empty">No zooms yet. Press <kbd>Z</kbd>, then click the frame.</li>
+        </ul>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- ── status bar ───────────────────────────────────────── -->
+  <footer class="statusbar">
+    <span class="mono" id="status">Ready — record your screen to start</span>
+    <span class="grow"></span>
+    <span class="mono hint"><kbd>Space</kbd> play <kbd>Z</kbd> zoom <kbd>T</kbd> text <kbd>Ctrl+K</kbd> commands <kbd>Ctrl+Z</kbd> undo</span>
+  </footer>
+
+  <div class="mupop" id="menuPop" hidden></div>
+
+  <!-- ── command palette ──────────────────────────────────── -->
+  <div class="cmdk" id="cmdk" hidden>
+    <div class="cmdk-box">
+      <input id="cmdkInput" placeholder="Type a command…" autocomplete="off" spellcheck="false">
+      <ul id="cmdkList"></ul>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="cursor.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
